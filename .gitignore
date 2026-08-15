@@ -1,5 +1,4 @@
 /target/
 .env
 .env.*
-!.env.dev.example
-!.env.prod.example
+!.env.*.example
