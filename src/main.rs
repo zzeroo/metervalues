@@ -1,25 +1,9 @@
 use std::env;
 
-use axum::routing::get;
-use axum::{Json, Router};
-use serde::Serialize;
 use sqlx::PgPool;
-use tower_http::services::ServeDir;
 use tracing::info;
 
-#[derive(Clone)]
-struct AppState {
-    db: PgPool,
-}
-
-#[derive(Serialize)]
-struct Health {
-    status: &'static str,
-}
-
-async fn health() -> Json<Health> {
-    Json(Health { status: "ok" })
-}
+use metervalues::create_app;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,15 +21,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let db = PgPool::connect(&database_url).await?;
 
-    // Apply all pending migrations automatically on startup.
     sqlx::migrate!("./migrations").run(&db).await?;
 
-    let state = AppState { db };
-
-    let app = Router::new()
-        .route("/health", get(health))
-        .fallback_service(ServeDir::new("static").append_index_html_on_directories(true))
-        .with_state(state);
+    let app = create_app(db);
 
     let listener = tokio::net::TcpListener::bind(&bind_address).await?;
 
