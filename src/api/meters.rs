@@ -1,8 +1,8 @@
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{Json, extract::State};
 
-use crate::{models::Meter, state::AppState};
+use crate::{error::AppError, models::Meter, state::AppState};
 
-pub async fn get_meters(State(state): State<AppState>) -> Result<Json<Vec<Meter>>, StatusCode> {
+pub async fn get_meters(State(state): State<AppState>) -> Result<Json<Vec<Meter>>, AppError> {
     let meters = sqlx::query_as::<_, Meter>(
         r#"
         SELECT id, name, unit
@@ -11,8 +11,7 @@ pub async fn get_meters(State(state): State<AppState>) -> Result<Json<Vec<Meter>
         "#,
     )
     .fetch_all(&state.db)
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .await?;
 
     Ok(Json(meters))
 }

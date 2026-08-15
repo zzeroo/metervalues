@@ -2,6 +2,7 @@ use axum::Router;
 use sqlx::PgPool;
 
 mod api;
+mod error;
 mod models;
 mod state;
 
