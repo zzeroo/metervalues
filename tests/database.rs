@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use sqlx::{PgPool, Postgres, Transaction};
 
 async fn test_db() -> PgPool {
@@ -55,7 +56,7 @@ async fn only_one_active_meter_is_allowed() {
     )
     .bind(meter_id)
     .bind("TEST-1001")
-    .bind(1000.0_f64)
+    .bind(Decimal::new(1_000_000, 3))
     .bind(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
     .bind(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
     .execute(&mut *tx)
@@ -80,7 +81,7 @@ async fn only_one_active_meter_is_allowed() {
     )
     .bind(meter_id)
     .bind("TEST-1002")
-    .bind(0.0_f64)
+    .bind(Decimal::ZERO)
     .bind(NaiveDate::from_ymd_opt(2026, 8, 15).unwrap())
     .bind(NaiveDate::from_ymd_opt(2026, 8, 15).unwrap())
     .execute(&mut *tx)
@@ -136,7 +137,7 @@ async fn meter_exchange_allows_new_active_meter() {
     )
     .bind(meter_id)
     .bind("TEST-OLD-1001")
-    .bind(500.0_f64)
+    .bind(Decimal::new(500_000, 3))
     .bind(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
     .bind(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
     .fetch_one(&mut *tx)
@@ -168,7 +169,7 @@ async fn meter_exchange_allows_new_active_meter() {
     )
     .bind(meter_id)
     .bind("TEST-NEW-1002")
-    .bind(0.0_f64)
+    .bind(Decimal::ZERO)
     .bind(NaiveDate::from_ymd_opt(2026, 8, 15).unwrap())
     .bind(NaiveDate::from_ymd_opt(2026, 8, 15).unwrap())
     .execute(&mut *tx)
