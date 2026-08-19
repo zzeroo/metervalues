@@ -451,3 +451,38 @@ async fn create_reading() {
         .await
         .expect("Could not clean up test meter");
 }
+
+#[tokio::test]
+async fn create_reading_for_nonexistent_meter_instance_returns_not_found() {
+    let db = test_db().await;
+
+    let app = metervalues::create_app(db);
+
+    let request_body = serde_json::json!({
+        "reading_date": "2026-08-20",
+        "value": "12345.000"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/meter-instances/999999/readings")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["error"], "not_found");
+}

@@ -29,6 +29,23 @@ pub async fn create_reading(
     Path(meter_instance_id): Path<i64>,
     Json(request): Json<CreateReading>,
 ) -> Result<(StatusCode, Json<ReadingResponse>), AppError> {
+    let exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM meter_instances
+            WHERE id = $1
+        )
+        "#,
+    )
+    .bind(meter_instance_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    if !exists {
+        return Err(AppError::NotFound);
+    }
+
     let reading = sqlx::query_as::<_, ReadingResponse>(
         r#"
         INSERT INTO readings (
