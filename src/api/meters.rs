@@ -1,6 +1,14 @@
-use axum::{Json, extract::State};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
 
-use crate::{error::AppError, models::Meter, state::AppState};
+use crate::{
+    error::AppError,
+    models::{CreateMeterInstance, Meter, MeterInstance},
+    state::AppState,
+};
 
 pub async fn get_meters(State(state): State<AppState>) -> Result<Json<Vec<Meter>>, AppError> {
     let meters = sqlx::query_as::<_, Meter>(
@@ -14,4 +22,40 @@ pub async fn get_meters(State(state): State<AppState>) -> Result<Json<Vec<Meter>
     .await?;
 
     Ok(Json(meters))
+}
+
+pub async fn create_meter_instance(
+    State(state): State<AppState>,
+    Path(meter_id): Path<i64>,
+    Json(payload): Json<CreateMeterInstance>,
+) -> Result<(StatusCode, Json<MeterInstance>), AppError> {
+    let meter_instance = sqlx::query_as::<_, MeterInstance>(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING
+            id,
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at,
+            removed_at
+        "#,
+    )
+    .bind(meter_id)
+    .bind(payload.meter_number)
+    .bind(payload.initial_reading)
+    .bind(payload.initial_reading_date)
+    .bind(payload.installed_at)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok((StatusCode::CREATED, Json(meter_instance)))
 }
