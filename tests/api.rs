@@ -232,3 +232,122 @@ async fn create_second_active_meter_instance_returns_conflict() {
         .await
         .expect("Could not clean up test meter");
 }
+
+#[tokio::test]
+async fn get_meter_instances_returns_all_instances() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Instances Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let first_meter_number = format!("TEST-INSTANCE-1-{meter_id}");
+    let second_meter_number = format!("TEST-INSTANCE-2-{meter_id}");
+
+    // Insert first physical meter.
+    sqlx::query(
+        r#"
+        INSERT INTO meter_instances
+            (
+                meter_id,
+                meter_number,
+                initial_reading,
+                initial_reading_date,
+                installed_at,
+                removed_at
+            )
+        VALUES ($1, $2, $3, $4, $5, $6)
+        "#,
+    )
+    .bind(meter_id)
+    .bind(&first_meter_number)
+    .bind(rust_decimal::Decimal::new(1000, 0))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(Some(chrono::NaiveDate::from_ymd_opt(2026, 6, 1).unwrap()))
+    .execute(&db)
+    .await
+    .expect("Could not create first meter instance");
+
+    // Insert replacement physical meter.
+    sqlx::query(
+        r#"
+        INSERT INTO meter_instances
+            (
+                meter_id,
+                meter_number,
+                initial_reading,
+                initial_reading_date,
+                installed_at
+            )
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(meter_id)
+    .bind(&second_meter_number)
+    .bind(rust_decimal::Decimal::new(0, 0))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 6, 2).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 6, 2).unwrap())
+    .execute(&db)
+    .await
+    .expect("Could not create second meter instance");
+
+    let app = metervalues::create_app(db.clone());
+
+    let uri = format!("/api/meters/{meter_id}/instances");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(&uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json.as_array().unwrap().len(), 2);
+
+    assert_eq!(json[0]["meter_id"], meter_id);
+    assert_eq!(json[0]["meter_number"], first_meter_number);
+    assert_eq!(json[0]["initial_reading"], "1000.000");
+    assert_eq!(json[0]["removed_at"], "2026-06-01");
+
+    assert_eq!(json[1]["meter_id"], meter_id);
+    assert_eq!(json[1]["meter_number"], second_meter_number);
+    assert_eq!(json[1]["initial_reading"], "0");
+    assert_eq!(json[1]["removed_at"], serde_json::Value::Null);
+
+    // Cleanup: child rows first.
+    sqlx::query("DELETE FROM meter_instances WHERE meter_id = $1")
+        .bind(meter_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test meter instances");
+
+    sqlx::query("DELETE FROM meters WHERE id = $1")
+        .bind(meter_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test meter");
+}

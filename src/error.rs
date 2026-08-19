@@ -20,13 +20,12 @@ struct ErrorResponse {
 
 impl From<sqlx::Error> for AppError {
     fn from(error: sqlx::Error) -> Self {
-        if let sqlx::Error::Database(db_error) = &error {
-            if db_error.code().as_deref() == Some("23505")
+        if let sqlx::Error::Database(db_error) = &error
+            && db_error.code().as_deref() == Some("23505")
                 && db_error.constraint() == Some("idx_one_active_meter_per_meter")
             {
                 return Self::Conflict;
             }
-        }
 
         Self::Database(error)
     }

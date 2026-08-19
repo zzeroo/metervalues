@@ -76,3 +76,29 @@ pub async fn create_meter_instance(
 
     Ok((StatusCode::CREATED, Json(meter_instance)))
 }
+
+pub async fn get_meter_instances(
+    State(state): State<AppState>,
+    Path(meter_id): Path<i64>,
+) -> Result<Json<Vec<MeterInstance>>, AppError> {
+    let instances = sqlx::query_as::<_, MeterInstance>(
+        r#"
+        SELECT
+            id,
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at,
+            removed_at
+        FROM meter_instances
+        WHERE meter_id = $1
+        ORDER BY installed_at
+        "#,
+    )
+    .bind(meter_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(instances))
+}
