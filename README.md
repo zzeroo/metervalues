@@ -56,6 +56,22 @@ Run:
 ./target/release/metervalues
 ```
 
+
+## Test Database
+
+Create `.env` from `.env.test.example` and set the PostgreSQL credentials.
+
+Set environment variables from `.env.test` and run tests:
+
+```bash
+set -a
+source .env.test
+set +a
+cargo test
+```
+
+
+
 ## Important
 
 The application intentionally does not contain Docker or a reverse proxy yet.
