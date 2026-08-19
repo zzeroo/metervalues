@@ -29,6 +29,23 @@ pub async fn create_meter_instance(
     Path(meter_id): Path<i64>,
     Json(payload): Json<CreateMeterInstance>,
 ) -> Result<(StatusCode, Json<MeterInstance>), AppError> {
+    let meter_exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1
+            FROM meters
+            WHERE id = $1
+        )
+        "#,
+    )
+    .bind(meter_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    if !meter_exists {
+        return Err(AppError::NotFound);
+    }
+
     let meter_instance = sqlx::query_as::<_, MeterInstance>(
         r#"
         INSERT INTO meter_instances (

@@ -102,3 +102,42 @@ async fn create_meter_instance() {
         .await
         .expect("Could not clean up test instance");
 }
+
+#[tokio::test]
+async fn create_meter_instance_for_nonexistent_meter_returns_not_found() {
+    let db = common::test_db().await;
+
+    let app = metervalues::create_app(db);
+
+    let request_body = serde_json::json!({
+        "meter_number": "TEST-NOT-FOUND",
+        "initial_reading": "0.000",
+        "initial_reading_date": "2026-08-15",
+        "installed_at": "2026-08-15"
+    });
+
+    let response = app
+        .oneshot(
+            axum::http::Request::builder()
+                .method(axum::http::Method::POST)
+                .uri("/api/meters/999999/instances")
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(axum::body::Body::from(
+                    serde_json::to_vec(&request_body).unwrap(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["error"], "not_found");
+}

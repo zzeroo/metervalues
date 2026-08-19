@@ -9,6 +9,7 @@ use tracing::error;
 #[derive(Debug)]
 pub enum AppError {
     Database(sqlx::Error),
+    NotFound,
 }
 
 #[derive(Serialize)]
@@ -36,6 +37,11 @@ impl IntoResponse for AppError {
                 )
                     .into_response()
             }
+            Self::NotFound => (
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse { error: "not_found" }),
+            )
+                .into_response(),
         }
     }
 }
