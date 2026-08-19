@@ -351,3 +351,103 @@ async fn get_meter_instances_returns_all_instances() {
         .await
         .expect("Could not clean up test meter");
 }
+
+#[tokio::test]
+async fn create_reading() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Reading Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let meter_number = format!("TEST-READING-{meter_id}");
+
+    // Create a dedicated physical meter instance.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances
+            (
+                meter_id,
+                meter_number,
+                initial_reading,
+                initial_reading_date,
+                installed_at
+            )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind(&meter_number)
+    .bind(rust_decimal::Decimal::new(1000, 0))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    let app = metervalues::create_app(db.clone());
+
+    let request_body = serde_json::json!({
+        "reading_date": "2026-08-19",
+        "value": "1234.567"
+    });
+
+    let uri = format!("/api/meter-instances/{meter_instance_id}/readings");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(&uri)
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&request_body).expect("Could not serialize request body"),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["meter_instance_id"], meter_instance_id);
+    assert_eq!(json["reading_date"], "2026-08-19");
+    assert_eq!(json["value"], "1234.567");
+
+    // Cleanup: readings first, then meter instance, then logical meter.
+    sqlx::query("DELETE FROM readings WHERE meter_instance_id = $1")
+        .bind(meter_instance_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test readings");
+
+    sqlx::query("DELETE FROM meter_instances WHERE id = $1")
+        .bind(meter_instance_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test meter instance");
+
+    sqlx::query("DELETE FROM meters WHERE id = $1")
+        .bind(meter_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test meter");
+}
