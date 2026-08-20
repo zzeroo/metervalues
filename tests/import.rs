@@ -1,6 +1,6 @@
 mod common;
 
-use metervalues::import::{import_meter_instances, import_meters};
+use metervalues::import::{import_meter_instances, import_meters, import_readings};
 
 use sqlx::PgPool;
 
@@ -310,6 +310,91 @@ Nonexistent Meter,ROLLBACK-INVALID-001,0.000,2026-08-20,2026-08-20,
     assert!(
         !valid_instance_exists,
         "A valid meter instance was imported even though the complete CSV import failed"
+    );
+
+    cleanup_meter(&db, meter_id).await;
+}
+
+#[tokio::test]
+async fn import_readings_from_valid_csv() {
+    let db = test_db().await;
+
+    // Create a logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Reading Import Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create the meter instance referenced by the CSV.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("IMPORT-READING-001")
+    .bind(rust_decimal::Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    let csv_data = r#"meter_number,value,reading_date
+IMPORT-READING-001,1234.567,2026-08-20
+"#;
+
+    let result = import_readings(&db, csv_data.as_bytes()).await;
+
+    assert!(
+        result.is_ok(),
+        "Expected reading import to succeed: {result:?}"
+    );
+
+    let imported_reading_ids = result.unwrap();
+
+    assert_eq!(
+        imported_reading_ids.len(),
+        1,
+        "Expected exactly one reading to be imported"
+    );
+
+    let imported_reading: (i64, rust_decimal::Decimal, chrono::NaiveDate) = sqlx::query_as(
+        r#"
+        SELECT
+            meter_instance_id,
+            value,
+            reading_date
+        FROM readings
+        WHERE id = $1
+        "#,
+    )
+    .bind(imported_reading_ids[0])
+    .fetch_one(&db)
+    .await
+    .expect("Could not find imported reading");
+
+    assert_eq!(imported_reading.0, meter_instance_id);
+    assert_eq!(imported_reading.1, rust_decimal::Decimal::new(1_234_567, 3));
+    assert_eq!(
+        imported_reading.2,
+        chrono::NaiveDate::from_ymd_opt(2026, 8, 20).unwrap()
     );
 
     cleanup_meter(&db, meter_id).await;

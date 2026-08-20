@@ -19,6 +19,13 @@ struct MeterInstanceCsvRow {
     removed_at: Option<NaiveDate>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ReadingCsvRow {
+    meter_number: String,
+    value: Decimal,
+    reading_date: NaiveDate,
+}
+
 pub async fn import_meters(
     db: &PgPool,
     csv_data: &[u8],
@@ -105,4 +112,54 @@ pub async fn import_meter_instances(
     transaction.commit().await?;
 
     Ok(imported_meter_instance_ids)
+}
+
+pub async fn import_readings(
+    db: &PgPool,
+    csv_data: &[u8],
+) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
+    let mut reader = csv::Reader::from_reader(csv_data);
+
+    let mut transaction = db.begin().await?;
+    let mut imported_reading_ids = Vec::new();
+
+    for result in reader.deserialize() {
+        let row: ReadingCsvRow = result?;
+
+        // Find the meter instance referenced by its meter number.
+        let meter_instance_id: i64 = sqlx::query_scalar(
+            r#"
+            SELECT id
+            FROM meter_instances
+            WHERE meter_number = $1
+            "#,
+        )
+        .bind(row.meter_number)
+        .fetch_one(&mut *transaction)
+        .await?;
+
+        // Insert the reading.
+        let reading_id: i64 = sqlx::query_scalar(
+            r#"
+            INSERT INTO readings (
+                meter_instance_id,
+                value,
+                reading_date
+            )
+            VALUES ($1, $2, $3)
+            RETURNING id
+            "#,
+        )
+        .bind(meter_instance_id)
+        .bind(row.value)
+        .bind(row.reading_date)
+        .fetch_one(&mut *transaction)
+        .await?;
+
+        imported_reading_ids.push(reading_id);
+    }
+
+    transaction.commit().await?;
+
+    Ok(imported_reading_ids)
 }
