@@ -19,3 +19,33 @@ pub async fn test_db() -> PgPool {
 
     db
 }
+
+#[allow(dead_code)]
+pub async fn cleanup_meter(db: &PgPool, meter_id: i64) {
+    sqlx::query(
+        r#"
+        DELETE FROM readings
+        WHERE meter_instance_id IN (
+            SELECT id
+            FROM meter_instances
+            WHERE meter_id = $1
+        )
+        "#,
+    )
+    .bind(meter_id)
+    .execute(db)
+    .await
+    .expect("Could not clean up test readings");
+
+    sqlx::query("DELETE FROM meter_instances WHERE meter_id = $1")
+        .bind(meter_id)
+        .execute(db)
+        .await
+        .expect("Could not clean up test meter instances");
+
+    sqlx::query("DELETE FROM meters WHERE id = $1")
+        .bind(meter_id)
+        .execute(db)
+        .await
+        .expect("Could not clean up test meter");
+}

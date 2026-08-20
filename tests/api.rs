@@ -4,7 +4,7 @@ use axum::{
     body::Body,
     http::{Method, Request, StatusCode, header::CONTENT_TYPE},
 };
-use common::test_db;
+use common::{cleanup_meter, test_db};
 use rust_decimal::Decimal;
 use tower::ServiceExt;
 
@@ -88,17 +88,7 @@ async fn create_meter_instance() {
     assert!(json["removed_at"].is_null());
 
     // Cleanup: child rows first because of the foreign key.
-    sqlx::query("DELETE FROM meter_instances WHERE meter_id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter instances");
-
-    sqlx::query("DELETE FROM meters WHERE id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter");
+    cleanup_meter(&db, meter_id).await;
 }
 
 #[tokio::test]
@@ -221,17 +211,7 @@ async fn create_second_active_meter_instance_returns_conflict() {
     assert_eq!(json["error"], "conflict");
 
     // Cleanup: child rows first, then the logical meter.
-    sqlx::query("DELETE FROM meter_instances WHERE meter_id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter instances");
-
-    sqlx::query("DELETE FROM meters WHERE id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter");
+    cleanup_meter(&db, meter_id).await;
 }
 
 #[tokio::test]
@@ -340,17 +320,7 @@ async fn get_meter_instances_returns_all_instances() {
     assert_eq!(json[1]["removed_at"], serde_json::Value::Null);
 
     // Cleanup: child rows first.
-    sqlx::query("DELETE FROM meter_instances WHERE meter_id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter instances");
-
-    sqlx::query("DELETE FROM meters WHERE id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter");
+    cleanup_meter(&db, meter_id).await;
 }
 
 #[tokio::test]
@@ -434,23 +404,7 @@ async fn create_reading() {
     assert_eq!(json["value"], "1234.567");
 
     // Cleanup: readings first, then meter instance, then logical meter.
-    sqlx::query("DELETE FROM readings WHERE meter_instance_id = $1")
-        .bind(meter_instance_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test readings");
-
-    sqlx::query("DELETE FROM meter_instances WHERE id = $1")
-        .bind(meter_instance_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter instance");
-
-    sqlx::query("DELETE FROM meters WHERE id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter");
+    cleanup_meter(&db, meter_id).await;
 }
 
 #[tokio::test]
@@ -591,21 +545,5 @@ async fn get_readings_returns_readings_in_chronological_order() {
     assert_eq!(json[2]["value"], "300.000");
 
     // Cleanup: readings -> meter instances -> meters.
-    sqlx::query("DELETE FROM readings WHERE meter_instance_id = $1")
-        .bind(meter_instance_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test readings");
-
-    sqlx::query("DELETE FROM meter_instances WHERE id = $1")
-        .bind(meter_instance_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter instance");
-
-    sqlx::query("DELETE FROM meters WHERE id = $1")
-        .bind(meter_id)
-        .execute(&db)
-        .await
-        .expect("Could not clean up test meter");
+    cleanup_meter(&db, meter_id).await;
 }
