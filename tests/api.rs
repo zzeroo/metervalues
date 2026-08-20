@@ -547,3 +547,79 @@ async fn get_readings_returns_readings_in_chronological_order() {
     // Cleanup: readings -> meter instances -> meters.
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn remove_meter_instance() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Remove Meter Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create an active meter instance.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("TEST-REMOVE-1001")
+    .bind(rust_decimal::Decimal::new(1000, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    let app = metervalues::create_app(db.clone());
+
+    let request_body = serde_json::json!({
+        "removed_at": "2026-08-20"
+    });
+
+    let uri = format!("/api/meter-instances/{meter_instance_id}");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::PATCH)
+                .uri(&uri)
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["id"], meter_instance_id);
+    assert_eq!(json["removed_at"], "2026-08-20");
+
+    cleanup_meter(&db, meter_id).await;
+}

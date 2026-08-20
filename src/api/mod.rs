@@ -1,4 +1,7 @@
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, patch},
+};
 use tower_http::services::ServeDir;
 
 use crate::state::AppState;
@@ -16,6 +19,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/meter-instances/{meter_instance_id}/readings",
             get(readings::get_readings).post(readings::create_reading),
+        )
+        .route(
+            "/api/meter-instances/{meter_instance_id}",
+            patch(meters::remove_meter_instance),
         )
         .route("/health", get(health))
         .fallback_service(ServeDir::new("static").append_index_html_on_directories(true))

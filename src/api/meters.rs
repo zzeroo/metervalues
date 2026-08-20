@@ -6,7 +6,7 @@ use axum::{
 
 use crate::{
     error::AppError,
-    models::{CreateMeterInstance, Meter, MeterInstance},
+    models::{CreateMeterInstance, Meter, MeterInstance, RemoveMeterInstance},
     state::AppState,
 };
 
@@ -101,4 +101,34 @@ pub async fn get_meter_instances(
     .await?;
 
     Ok(Json(instances))
+}
+
+pub async fn remove_meter_instance(
+    State(state): State<AppState>,
+    Path(meter_instance_id): Path<i64>,
+    Json(request): Json<RemoveMeterInstance>,
+) -> Result<Json<MeterInstance>, AppError> {
+    let meter_instance = sqlx::query_as::<_, MeterInstance>(
+        r#"
+        UPDATE meter_instances
+        SET removed_at = $1
+        WHERE id = $2
+        RETURNING
+            id,
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at,
+            removed_at,
+            created_at
+        "#,
+    )
+    .bind(request.removed_at)
+    .bind(meter_instance_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    Ok(Json(meter_instance))
 }
