@@ -399,3 +399,194 @@ IMPORT-READING-001,1234.567,2026-08-20
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn import_multiple_readings_from_valid_csv() {
+    let db = test_db().await;
+
+    // Create a logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Multiple Reading Import Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create the meter instance referenced by the CSV.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("IMPORT-MULTI-READING-001")
+    .bind(rust_decimal::Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    let csv_data = r#"meter_number,value,reading_date
+IMPORT-MULTI-READING-001,100.000,2026-01-31
+IMPORT-MULTI-READING-001,250.500,2026-02-28
+IMPORT-MULTI-READING-001,375.750,2026-03-31
+"#;
+
+    let result = import_readings(&db, csv_data.as_bytes()).await;
+
+    assert!(
+        result.is_ok(),
+        "Expected reading import to succeed: {result:?}"
+    );
+
+    let imported_reading_ids = result.unwrap();
+
+    assert_eq!(
+        imported_reading_ids.len(),
+        3,
+        "Expected all three readings to be imported"
+    );
+
+    let imported_readings: Vec<(i64, rust_decimal::Decimal, chrono::NaiveDate)> = sqlx::query_as(
+        r#"
+            SELECT
+                meter_instance_id,
+                value,
+                reading_date
+            FROM readings
+            WHERE id = ANY($1)
+            ORDER BY reading_date
+            "#,
+    )
+    .bind(&imported_reading_ids)
+    .fetch_all(&db)
+    .await
+    .expect("Could not query imported readings");
+
+    assert_eq!(imported_readings.len(), 3);
+
+    assert_eq!(imported_readings[0].0, meter_instance_id);
+    assert_eq!(
+        imported_readings[0].1,
+        rust_decimal::Decimal::new(100_000, 3)
+    );
+    assert_eq!(
+        imported_readings[0].2,
+        chrono::NaiveDate::from_ymd_opt(2026, 1, 31).unwrap()
+    );
+
+    assert_eq!(imported_readings[1].0, meter_instance_id);
+    assert_eq!(
+        imported_readings[1].1,
+        rust_decimal::Decimal::new(250_500, 3)
+    );
+    assert_eq!(
+        imported_readings[1].2,
+        chrono::NaiveDate::from_ymd_opt(2026, 2, 28).unwrap()
+    );
+
+    assert_eq!(imported_readings[2].0, meter_instance_id);
+    assert_eq!(
+        imported_readings[2].1,
+        rust_decimal::Decimal::new(375_750, 3)
+    );
+    assert_eq!(
+        imported_readings[2].2,
+        chrono::NaiveDate::from_ymd_opt(2026, 3, 31).unwrap()
+    );
+
+    cleanup_meter(&db, meter_id).await;
+}
+
+#[tokio::test]
+async fn import_readings_rolls_back_when_csv_contains_invalid_row() {
+    let db = test_db().await;
+
+    // Create a logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Reading Import Rollback Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create the meter instance referenced by the valid CSV row.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("IMPORT-READING-ROLLBACK-001")
+    .bind(rust_decimal::Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    let csv_data = r#"meter_number,value,reading_date
+IMPORT-READING-ROLLBACK-001,100.000,2026-01-31
+NONEXISTENT-METER,200.000,2026-02-28
+"#;
+
+    let result = import_readings(&db, csv_data.as_bytes()).await;
+
+    assert!(
+        result.is_err(),
+        "Expected import to fail because one CSV row references a nonexistent meter instance"
+    );
+
+    // The first row was valid, but the entire transaction must roll back.
+    let valid_reading_exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM readings
+            WHERE meter_instance_id = $1
+              AND reading_date = $2
+        )
+        "#,
+    )
+    .bind(meter_instance_id)
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 31).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not query test database");
+
+    assert!(
+        !valid_reading_exists,
+        "A valid reading was imported even though the complete CSV import failed"
+    );
+
+    cleanup_meter(&db, meter_id).await;
+}
