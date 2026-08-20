@@ -623,3 +623,37 @@ async fn remove_meter_instance() {
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn remove_nonexistent_meter_instance_returns_not_found() {
+    let db = test_db().await;
+
+    let app = metervalues::create_app(db);
+
+    let request_body = serde_json::json!({
+        "removed_at": "2026-08-20"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::PATCH)
+                .uri("/api/meter-instances/999999")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["error"], "not_found");
+}
