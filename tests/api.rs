@@ -989,3 +989,23 @@ async fn get_meter_by_id() {
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn get_nonexistent_meter_returns_not_found() {
+    let db = test_db().await;
+
+    let app = metervalues::create_app(db);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/api/meters/999999999")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
