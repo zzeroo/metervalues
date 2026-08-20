@@ -261,3 +261,56 @@ Multiple Instance Import Test,IMPORT-MULTI-002,100.000,2026-08-20,2026-08-20,
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn import_meter_instances_rolls_back_when_csv_contains_invalid_row() {
+    let db = test_db().await;
+
+    // Create the logical meter referenced by the valid CSV row.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Instance Import Rollback Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let csv_data = r#"meter_name,meter_number,initial_reading,initial_reading_date,installed_at,removed_at
+Instance Import Rollback Test,ROLLBACK-VALID-001,0.000,2026-01-01,2026-01-01,2026-08-19
+Nonexistent Meter,ROLLBACK-INVALID-001,0.000,2026-08-20,2026-08-20,
+"#;
+
+    let result = import_meter_instances(&db, csv_data.as_bytes()).await;
+
+    assert!(
+        result.is_err(),
+        "Expected import to fail because one CSV row references a nonexistent meter"
+    );
+
+    // The first row was valid, but the complete import must be rolled back.
+    let valid_instance_exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM meter_instances
+            WHERE meter_number = $1
+        )
+        "#,
+    )
+    .bind("ROLLBACK-VALID-001")
+    .fetch_one(&db)
+    .await
+    .expect("Could not query test database");
+
+    assert!(
+        !valid_instance_exists,
+        "A valid meter instance was imported even though the complete CSV import failed"
+    );
+
+    cleanup_meter(&db, meter_id).await;
+}
