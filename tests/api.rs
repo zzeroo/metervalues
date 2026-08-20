@@ -861,8 +861,18 @@ async fn failed_meter_exchange_keeps_old_instance_active() {
         .await
         .expect("Request failed");
 
-    // The duplicate meter number should cause the exchange to fail.
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    // The duplicate meter number should cause a conflict.
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+
+    // Verify the API error response.
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["error"], "conflict");
 
     // Most importantly: verify that the old instance is still active.
     let removed_at: Option<chrono::NaiveDate> = sqlx::query_scalar(
@@ -882,6 +892,7 @@ async fn failed_meter_exchange_keeps_old_instance_active() {
         "Old meter instance was removed even though the exchange failed"
     );
 
+    // Cleanup.
     cleanup_meter(&db, meter_id).await;
     cleanup_meter(&db, duplicate_meter_id).await;
 }
