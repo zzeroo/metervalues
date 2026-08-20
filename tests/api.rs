@@ -1009,3 +1009,25 @@ async fn get_nonexistent_meter_returns_not_found() {
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn import_meters_from_csv() {
+    let db = test_db().await;
+    let app = metervalues::create_app(db.clone());
+
+    let csv_data = r#"name,unit
+API Import Electricity,kWh
+API Import Water,m³
+"#;
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/import/meters")
+        .header("content-type", "text/csv")
+        .body(Body::from(csv_data))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+}

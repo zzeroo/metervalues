@@ -6,6 +6,7 @@ use tower_http::services::ServeDir;
 
 use crate::state::AppState;
 
+mod import;
 mod meters;
 mod readings;
 
@@ -32,6 +33,7 @@ pub fn router() -> Router<AppState> {
             "/api/meter-instances/{old_meter_instance_id}/exchange",
             post(meters::exchange_meter_instance),
         )
+        .route("/api/import/meters", post(import::import_meters))
         .route("/health", get(health))
         .fallback_service(ServeDir::new("static").append_index_html_on_directories(true))
 }
