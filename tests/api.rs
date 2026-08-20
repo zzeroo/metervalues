@@ -5,6 +5,7 @@ use axum::{
     http::{Method, Request, StatusCode, header::CONTENT_TYPE},
 };
 use common::test_db;
+use rust_decimal::Decimal;
 use tower::ServiceExt;
 
 #[tokio::test]
@@ -485,4 +486,126 @@ async fn create_reading_for_nonexistent_meter_instance_returns_not_found() {
         serde_json::from_slice(&body).expect("Response is not valid JSON");
 
     assert_eq!(json["error"], "not_found");
+}
+
+#[tokio::test]
+async fn get_readings_returns_readings_in_chronological_order() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Reading Order Test")
+    .bind("m³")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create a dedicated meter instance.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("TEST-READING-ORDER-1001")
+    .bind(Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    // Insert readings deliberately out of chronological order.
+    sqlx::query(
+        r#"
+        INSERT INTO readings (
+            meter_instance_id,
+            reading_date,
+            value
+        )
+        VALUES
+            ($1, $2, $3),
+            ($1, $4, $5),
+            ($1, $6, $7)
+        "#,
+    )
+    .bind(meter_instance_id)
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 8, 20).unwrap())
+    .bind(Decimal::new(300_000, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 8, 10).unwrap())
+    .bind(Decimal::new(100_000, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 8, 15).unwrap())
+    .bind(Decimal::new(200_000, 3))
+    .execute(&db)
+    .await
+    .expect("Could not create test readings");
+
+    let app = metervalues::create_app(db.clone());
+
+    let uri = format!("/api/meter-instances/{meter_instance_id}/readings");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(&uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json.as_array().unwrap().len(), 3);
+
+    // The response must be sorted by reading_date ascending.
+    assert_eq!(json[0]["reading_date"], "2026-08-10");
+    assert_eq!(json[0]["value"], "100.000");
+
+    assert_eq!(json[1]["reading_date"], "2026-08-15");
+    assert_eq!(json[1]["value"], "200.000");
+
+    assert_eq!(json[2]["reading_date"], "2026-08-20");
+    assert_eq!(json[2]["value"], "300.000");
+
+    // Cleanup: readings -> meter instances -> meters.
+    sqlx::query("DELETE FROM readings WHERE meter_instance_id = $1")
+        .bind(meter_instance_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test readings");
+
+    sqlx::query("DELETE FROM meter_instances WHERE id = $1")
+        .bind(meter_instance_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test meter instance");
+
+    sqlx::query("DELETE FROM meters WHERE id = $1")
+        .bind(meter_id)
+        .execute(&db)
+        .await
+        .expect("Could not clean up test meter");
 }

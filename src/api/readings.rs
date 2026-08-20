@@ -69,3 +69,26 @@ pub async fn create_reading(
 
     Ok((StatusCode::CREATED, Json(reading)))
 }
+
+pub async fn get_readings(
+    State(state): State<AppState>,
+    Path(meter_instance_id): Path<i64>,
+) -> Result<Json<Vec<ReadingResponse>>, AppError> {
+    let readings = sqlx::query_as::<_, ReadingResponse>(
+        r#"
+        SELECT
+            id,
+            meter_instance_id,
+            reading_date,
+            value
+        FROM readings
+        WHERE meter_instance_id = $1
+        ORDER BY reading_date ASC
+        "#,
+    )
+    .bind(meter_instance_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    Ok(Json(readings))
+}
