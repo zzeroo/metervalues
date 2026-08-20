@@ -940,3 +940,52 @@ async fn create_meter() {
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn get_meter_by_id() {
+    let db = test_db().await;
+
+    // Create a dedicated meter for this test.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Get Meter Test")
+    .bind("m³")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let app = metervalues::create_app(db.clone());
+
+    let uri = format!("/api/meters/{meter_id}");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(&uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    assert_eq!(json["id"], meter_id);
+    assert_eq!(json["name"], "API Get Meter Test");
+    assert_eq!(json["unit"], "m³");
+
+    cleanup_meter(&db, meter_id).await;
+}

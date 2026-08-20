@@ -220,3 +220,22 @@ pub async fn create_meter(
 
     Ok((StatusCode::CREATED, Json(meter)))
 }
+
+pub async fn get_meter(
+    State(state): State<AppState>,
+    Path(meter_id): Path<i64>,
+) -> Result<Json<Meter>, AppError> {
+    let meter = sqlx::query_as::<_, Meter>(
+        r#"
+        SELECT id, name, unit
+        FROM meters
+        WHERE id = $1
+        "#,
+    )
+    .bind(meter_id)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    Ok(Json(meter))
+}
