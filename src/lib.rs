@@ -3,6 +3,7 @@ use sqlx::PgPool;
 
 mod api;
 mod error;
+pub mod import;
 mod models;
 mod state;
 
