@@ -1031,3 +1031,40 @@ API Import Water,m³
 
     assert_eq!(response.status(), StatusCode::CREATED);
 }
+
+#[tokio::test]
+async fn import_meter_instances_from_csv() {
+    let db = test_db().await;
+    let app = metervalues::create_app(db.clone());
+
+    // Create the logical meter referenced by the CSV.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Import Instance Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let csv_data = r#"meter_name,meter_number,initial_reading,initial_reading_date,installed_at,removed_at
+API Import Instance Test,API-IMPORT-001,0.000,2026-01-01,2026-01-01,
+"#;
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/import/meter-instances")
+        .header("content-type", "text/csv")
+        .body(Body::from(csv_data))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    cleanup_meter(&db, meter_id).await;
+}

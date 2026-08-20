@@ -34,6 +34,10 @@ pub fn router() -> Router<AppState> {
             post(meters::exchange_meter_instance),
         )
         .route("/api/import/meters", post(import::import_meters))
+        .route(
+            "/api/import/meter-instances",
+            post(import::import_meter_instances),
+        )
         .route("/health", get(health))
         .fallback_service(ServeDir::new("static").append_index_html_on_directories(true))
 }
