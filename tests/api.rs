@@ -759,3 +759,129 @@ async fn exchange_meter_instance() {
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn failed_meter_exchange_keeps_old_instance_active() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter for the exchange.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Exchange Rollback Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create the active meter instance we will attempt to exchange.
+    let old_meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("TEST-EXCHANGE-ROLLBACK-OLD")
+    .bind(rust_decimal::Decimal::new(1000, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create old meter instance");
+
+    // Create another meter with a meter number that we will deliberately
+    // try to reuse during the exchange.
+    let duplicate_meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Duplicate Meter Number Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create duplicate test meter");
+
+    sqlx::query(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        "#,
+    )
+    .bind(duplicate_meter_id)
+    .bind("TEST-EXCHANGE-DUPLICATE")
+    .bind(rust_decimal::Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .execute(&db)
+    .await
+    .expect("Could not create duplicate meter instance");
+
+    let app = metervalues::create_app(db.clone());
+
+    let request_body = serde_json::json!({
+        "removed_at": "2026-08-20",
+        "meter_number": "TEST-EXCHANGE-DUPLICATE",
+        "initial_reading": "0.000",
+        "initial_reading_date": "2026-08-20",
+        "installed_at": "2026-08-20"
+    });
+
+    let uri = format!("/api/meter-instances/{old_meter_instance_id}/exchange");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(&uri)
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    // The duplicate meter number should cause the exchange to fail.
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    // Most importantly: verify that the old instance is still active.
+    let removed_at: Option<chrono::NaiveDate> = sqlx::query_scalar(
+        r#"
+        SELECT removed_at
+        FROM meter_instances
+        WHERE id = $1
+        "#,
+    )
+    .bind(old_meter_instance_id)
+    .fetch_one(&db)
+    .await
+    .expect("Could not query old meter instance");
+
+    assert!(
+        removed_at.is_none(),
+        "Old meter instance was removed even though the exchange failed"
+    );
+
+    cleanup_meter(&db, meter_id).await;
+    cleanup_meter(&db, duplicate_meter_id).await;
+}
