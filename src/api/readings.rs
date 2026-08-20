@@ -3,26 +3,9 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use chrono::NaiveDate;
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
 
+use crate::models::{CreateReading, ReadingResponse};
 use crate::{error::AppError, state::AppState};
-
-#[derive(Debug, Deserialize)]
-pub struct CreateReading {
-    pub reading_date: NaiveDate,
-    pub value: Decimal,
-}
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct ReadingResponse {
-    pub id: i64,
-    pub meter_instance_id: i64,
-    pub reading_date: NaiveDate,
-    pub value: Decimal,
-}
 
 pub async fn create_reading(
     State(state): State<AppState>,

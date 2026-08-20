@@ -3,11 +3,6 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-#[derive(Debug, Deserialize)]
-pub struct RemoveMeterInstance {
-    pub removed_at: NaiveDate,
-}
-
 #[derive(Debug, Serialize, FromRow)]
 pub struct Meter {
     pub id: i64,
@@ -32,4 +27,23 @@ pub struct MeterInstance {
     pub initial_reading_date: NaiveDate,
     pub installed_at: NaiveDate,
     pub removed_at: Option<NaiveDate>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateReading {
+    pub reading_date: NaiveDate,
+    pub value: Decimal,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct ReadingResponse {
+    pub id: i64,
+    pub meter_instance_id: i64,
+    pub reading_date: NaiveDate,
+    pub value: Decimal,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RemoveMeterInstance {
+    pub removed_at: NaiveDate,
 }
