@@ -1,6 +1,7 @@
 mod common;
 
-use metervalues::import::import_meters;
+use metervalues::import::{import_meter_instances, import_meters};
+
 use sqlx::PgPool;
 
 use common::{cleanup_meter, test_db};
@@ -121,4 +122,75 @@ Invalid Import Test
         !exists,
         "A valid row was imported even though the complete CSV import failed"
     );
+}
+
+#[tokio::test]
+async fn import_meter_instances_from_valid_csv() {
+    let db = test_db().await;
+
+    // Create the logical meter that the CSV will reference.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Import Electricity")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let csv_data = r#"meter_name,meter_number,initial_reading,initial_reading_date,installed_at
+Import Electricity,IMPORT-12345,0.000,2026-01-01,2026-01-01
+"#;
+
+    let result = import_meter_instances(&db, csv_data.as_bytes()).await;
+
+    assert!(
+        result.is_ok(),
+        "Expected meter instance import to succeed: {result:?}"
+    );
+
+    let imported_meter_instance_ids = result.unwrap();
+    assert_eq!(imported_meter_instance_ids.len(), 1);
+    let imported_meter_instance_id = imported_meter_instance_ids[0];
+
+    let meter_instance: (
+        i64,
+        String,
+        rust_decimal::Decimal,
+        chrono::NaiveDate,
+        chrono::NaiveDate,
+    ) = sqlx::query_as(
+        r#"
+        SELECT
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        FROM meter_instances
+        WHERE id = $1
+        "#,
+    )
+    .bind(imported_meter_instance_id)
+    .fetch_one(&db)
+    .await
+    .expect("Could not find imported meter instance");
+
+    assert_eq!(meter_instance.0, meter_id);
+    assert_eq!(meter_instance.1, "IMPORT-12345");
+    assert_eq!(meter_instance.2, rust_decimal::Decimal::new(0, 3));
+    assert_eq!(
+        meter_instance.3,
+        chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
+    );
+    assert_eq!(
+        meter_instance.4,
+        chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()
+    );
+
+    cleanup_meter(&db, meter_id).await;
 }
