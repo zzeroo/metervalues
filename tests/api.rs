@@ -1068,3 +1068,83 @@ API Import Instance Test,API-IMPORT-001,0.000,2026-01-01,2026-01-01,
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn import_readings_from_csv() {
+    let db = test_db().await;
+    let app = metervalues::create_app(db.clone());
+
+    // Create a logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Reading Import API Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create the physical meter instance referenced by the CSV.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("READING-IMPORT-001")
+    .bind(rust_decimal::Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    let csv_data = r#"meter_number,reading_date,value
+READING-IMPORT-001,2026-02-01,123.456
+"#;
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/import/readings")
+        .header("content-type", "text/csv")
+        .body(Body::from(csv_data))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let reading_exists: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM readings
+            WHERE meter_instance_id = $1
+              AND reading_date = $2
+              AND value = $3
+        )
+        "#,
+    )
+    .bind(meter_instance_id)
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 2, 1).unwrap())
+    .bind(rust_decimal::Decimal::new(123_456, 3))
+    .fetch_one(&db)
+    .await
+    .expect("Could not query imported reading");
+
+    assert!(reading_exists);
+
+    cleanup_meter(&db, meter_id).await;
+}

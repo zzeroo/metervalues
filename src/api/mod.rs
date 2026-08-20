@@ -38,6 +38,7 @@ pub fn router() -> Router<AppState> {
             "/api/import/meter-instances",
             post(import::import_meter_instances),
         )
+        .route("/api/import/readings", post(import::import_readings))
         .route("/health", get(health))
         .fallback_service(ServeDir::new("static").append_index_html_on_directories(true))
 }
