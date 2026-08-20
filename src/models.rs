@@ -47,3 +47,12 @@ pub struct ReadingResponse {
 pub struct RemoveMeterInstance {
     pub removed_at: NaiveDate,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ExchangeMeterInstance {
+    pub removed_at: NaiveDate,
+    pub meter_number: String,
+    pub initial_reading: Decimal,
+    pub initial_reading_date: NaiveDate,
+    pub installed_at: NaiveDate,
+}

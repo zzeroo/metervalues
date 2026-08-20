@@ -657,3 +657,105 @@ async fn remove_nonexistent_meter_instance_returns_not_found() {
 
     assert_eq!(json["error"], "not_found");
 }
+
+#[tokio::test]
+async fn exchange_meter_instance() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Exchange Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create the currently active meter instance.
+    let old_meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("TEST-EXCHANGE-OLD")
+    .bind(rust_decimal::Decimal::new(12345, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create old meter instance");
+
+    let app = metervalues::create_app(db.clone());
+
+    let request_body = serde_json::json!({
+        "removed_at": "2026-08-20",
+        "meter_number": "TEST-EXCHANGE-NEW",
+        "initial_reading": "0.000",
+        "initial_reading_date": "2026-08-20",
+        "installed_at": "2026-08-20"
+    });
+
+    let uri = format!("/api/meter-instances/{old_meter_instance_id}/exchange");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri(&uri)
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(&request_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    // The response should contain the newly created meter instance.
+    assert_eq!(json["meter_id"], meter_id);
+    assert_eq!(json["meter_number"], "TEST-EXCHANGE-NEW");
+    assert_eq!(json["initial_reading"], "0");
+    assert_eq!(json["installed_at"], "2026-08-20");
+    assert!(json["removed_at"].is_null());
+
+    // Verify that the old instance was actually removed.
+    let removed_at: Option<chrono::NaiveDate> = sqlx::query_scalar(
+        r#"
+        SELECT removed_at
+        FROM meter_instances
+        WHERE id = $1
+        "#,
+    )
+    .bind(old_meter_instance_id)
+    .fetch_one(&db)
+    .await
+    .expect("Could not query old meter instance");
+
+    assert_eq!(
+        removed_at,
+        Some(chrono::NaiveDate::from_ymd_opt(2026, 8, 20).unwrap())
+    );
+
+    cleanup_meter(&db, meter_id).await;
+}

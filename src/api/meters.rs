@@ -6,7 +6,9 @@ use axum::{
 
 use crate::{
     error::AppError,
-    models::{CreateMeterInstance, Meter, MeterInstance, RemoveMeterInstance},
+    models::{
+        CreateMeterInstance, ExchangeMeterInstance, Meter, MeterInstance, RemoveMeterInstance,
+    },
     state::AppState,
 };
 
@@ -131,4 +133,70 @@ pub async fn remove_meter_instance(
     .ok_or(AppError::NotFound)?;
 
     Ok(Json(meter_instance))
+}
+
+pub async fn exchange_meter_instance(
+    State(state): State<AppState>,
+    Path(old_meter_instance_id): Path<i64>,
+    Json(request): Json<ExchangeMeterInstance>,
+) -> Result<(StatusCode, Json<MeterInstance>), AppError> {
+    let mut transaction = state.db.begin().await?;
+
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        SELECT meter_id
+        FROM meter_instances
+        WHERE id = $1
+          AND removed_at IS NULL
+        "#,
+    )
+    .bind(old_meter_instance_id)
+    .fetch_optional(&mut *transaction)
+    .await?
+    .ok_or(AppError::NotFound)?;
+
+    sqlx::query(
+        r#"
+        UPDATE meter_instances
+        SET removed_at = $1
+        WHERE id = $2
+        "#,
+    )
+    .bind(request.removed_at)
+    .bind(old_meter_instance_id)
+    .execute(&mut *transaction)
+    .await?;
+
+    let new_meter_instance = sqlx::query_as::<_, MeterInstance>(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING
+            id,
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at,
+            removed_at,
+            created_at
+        "#,
+    )
+    .bind(meter_id)
+    .bind(request.meter_number)
+    .bind(request.initial_reading)
+    .bind(request.initial_reading_date)
+    .bind(request.installed_at)
+    .fetch_one(&mut *transaction)
+    .await?;
+
+    transaction.commit().await?;
+
+    Ok((StatusCode::CREATED, Json(new_meter_instance)))
 }
