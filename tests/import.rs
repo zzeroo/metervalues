@@ -194,3 +194,70 @@ Import Electricity,IMPORT-12345,0.000,2026-01-01,2026-01-01
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn import_multiple_meter_instances_from_valid_csv() {
+    let db = test_db().await;
+
+    // Create the logical meter referenced by both CSV rows.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("Multiple Instance Import Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    let csv_data = r#"meter_name,meter_number,initial_reading,initial_reading_date,installed_at,removed_at
+Multiple Instance Import Test,IMPORT-MULTI-001,0.000,2026-01-01,2026-01-01,2026-08-19
+Multiple Instance Import Test,IMPORT-MULTI-002,100.000,2026-08-20,2026-08-20,
+"#;
+
+    let result = import_meter_instances(&db, csv_data.as_bytes()).await;
+
+    assert!(
+        result.is_ok(),
+        "Expected meter instance import to succeed: {result:?}"
+    );
+
+    let imported_meter_instance_ids = result.unwrap();
+
+    assert_eq!(
+        imported_meter_instance_ids.len(),
+        2,
+        "Expected both meter instances to be imported"
+    );
+
+    let imported_instances: Vec<(i64, String, rust_decimal::Decimal)> = sqlx::query_as(
+        r#"
+        SELECT meter_id, meter_number, initial_reading
+        FROM meter_instances
+        WHERE id = ANY($1)
+        ORDER BY meter_number
+        "#,
+    )
+    .bind(&imported_meter_instance_ids)
+    .fetch_all(&db)
+    .await
+    .expect("Could not query imported meter instances");
+
+    assert_eq!(imported_instances.len(), 2);
+
+    assert_eq!(imported_instances[0].0, meter_id);
+    assert_eq!(imported_instances[0].1, "IMPORT-MULTI-001");
+    assert_eq!(imported_instances[0].2, rust_decimal::Decimal::new(0, 3));
+
+    assert_eq!(imported_instances[1].0, meter_id);
+    assert_eq!(imported_instances[1].1, "IMPORT-MULTI-002");
+    assert_eq!(
+        imported_instances[1].2,
+        rust_decimal::Decimal::new(100_000, 3)
+    );
+
+    cleanup_meter(&db, meter_id).await;
+}

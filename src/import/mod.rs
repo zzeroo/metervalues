@@ -16,6 +16,7 @@ struct MeterInstanceCsvRow {
     initial_reading: Decimal,
     initial_reading_date: NaiveDate,
     installed_at: NaiveDate,
+    removed_at: Option<NaiveDate>,
 }
 
 pub async fn import_meters(
@@ -70,7 +71,7 @@ pub async fn import_meter_instances(
             WHERE name = $1
             "#,
         )
-        .bind(row.meter_name)
+        .bind(&row.meter_name)
         .fetch_one(&mut *transaction)
         .await?;
 
@@ -82,9 +83,10 @@ pub async fn import_meter_instances(
                 meter_number,
                 initial_reading,
                 initial_reading_date,
-                installed_at
+                installed_at,
+                removed_at
             )
-            VALUES ($1, $2, $3, $4, $5)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             "#,
         )
@@ -93,6 +95,7 @@ pub async fn import_meter_instances(
         .bind(row.initial_reading)
         .bind(row.initial_reading_date)
         .bind(row.installed_at)
+        .bind(row.removed_at)
         .fetch_one(&mut *transaction)
         .await?;
 
