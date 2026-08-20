@@ -12,6 +12,7 @@ pub async fn import_meters(
 ) -> Result<Vec<i64>, Box<dyn std::error::Error>> {
     let mut reader = csv::Reader::from_reader(csv_data);
 
+    let mut transaction = db.begin().await?;
     let mut imported_meter_ids = Vec::new();
 
     for result in reader.deserialize() {
@@ -26,11 +27,13 @@ pub async fn import_meters(
         )
         .bind(row.name)
         .bind(row.unit)
-        .fetch_one(db)
+        .fetch_one(&mut *transaction)
         .await?;
 
         imported_meter_ids.push(meter_id);
     }
+
+    transaction.commit().await?;
 
     Ok(imported_meter_ids)
 }
