@@ -11,7 +11,10 @@ mod readings;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/meters", get(meters::get_meters))
+        .route(
+            "/api/meters",
+            get(meters::get_meters).post(meters::create_meter),
+        )
         .route(
             "/api/meters/{meter_id}/instances",
             get(meters::get_meter_instances).post(meters::create_meter_instance),

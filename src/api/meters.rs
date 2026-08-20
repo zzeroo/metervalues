@@ -7,7 +7,8 @@ use axum::{
 use crate::{
     error::AppError,
     models::{
-        CreateMeterInstance, ExchangeMeterInstance, Meter, MeterInstance, RemoveMeterInstance,
+        CreateMeter, CreateMeterInstance, ExchangeMeterInstance, Meter, MeterInstance,
+        RemoveMeterInstance,
     },
     state::AppState,
 };
@@ -199,4 +200,23 @@ pub async fn exchange_meter_instance(
     transaction.commit().await?;
 
     Ok((StatusCode::CREATED, Json(new_meter_instance)))
+}
+
+pub async fn create_meter(
+    State(state): State<AppState>,
+    Json(request): Json<CreateMeter>,
+) -> Result<(StatusCode, Json<Meter>), AppError> {
+    let meter = sqlx::query_as::<_, Meter>(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id, name, unit
+        "#,
+    )
+    .bind(request.name)
+    .bind(request.unit)
+    .fetch_one(&state.db)
+    .await?;
+
+    Ok((StatusCode::CREATED, Json(meter)))
 }

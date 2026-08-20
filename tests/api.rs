@@ -896,3 +896,47 @@ async fn failed_meter_exchange_keeps_old_instance_active() {
     cleanup_meter(&db, meter_id).await;
     cleanup_meter(&db, duplicate_meter_id).await;
 }
+
+#[tokio::test]
+async fn create_meter() {
+    let db = test_db().await;
+
+    let app = metervalues::create_app(db.clone());
+
+    let request_body = serde_json::json!({
+        "name": "API Test Water",
+        "unit": "m³"
+    });
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::POST)
+                .uri("/api/meters")
+                .header(CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&request_body).expect("Could not serialize request body"),
+                ))
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("Could not read response body");
+
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("Response is not valid JSON");
+
+    let meter_id = json["id"]
+        .as_i64()
+        .expect("Response does not contain a valid meter id");
+
+    assert_eq!(json["name"], "API Test Water");
+    assert_eq!(json["unit"], "m³");
+
+    cleanup_meter(&db, meter_id).await;
+}

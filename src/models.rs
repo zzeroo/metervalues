@@ -56,3 +56,9 @@ pub struct ExchangeMeterInstance {
     pub initial_reading_date: NaiveDate,
     pub installed_at: NaiveDate,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct CreateMeter {
+    pub name: String,
+    pub unit: String,
+}
