@@ -42,3 +42,25 @@ a {
 .meter-card span {
     font-weight: bold;
 }
+
+.meter-instance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.meter-instance-card {
+    padding: 1.5rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+.meter-instance-card h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+.meter-instance-card p {
+    margin: 0.5rem 0;
+}
