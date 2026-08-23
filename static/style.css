@@ -8,3 +8,37 @@ body {
 a {
     text-decoration: none;
 }
+
+.meter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.meter-card {
+    display: block;
+    padding: 1.5rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    color: inherit;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.meter-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+}
+
+.meter-card h2 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
+.meter-card p {
+    margin: 0 0 1.5rem;
+    color: #666;
+}
+
+.meter-card span {
+    font-weight: bold;
+}
