@@ -2,18 +2,40 @@
 
 set -euo pipefail
 
-# Load test database configuration.
-set -a
-source .env.test
-set +a
+ENVIRONMENT="${1:-}"
 
-# Safety check.
-if [[ "${DATABASE_URL}" != *"metervalues_test"* ]]; then
-    echo "ERROR: DATABASE_URL does not point to metervalues_test"
+case "$ENVIRONMENT" in
+    test)
+        ENV_FILE=".env.test"
+        EXPECTED_DATABASE="metervalues_test"
+        ;;
+    dev)
+        ENV_FILE=".env.dev"
+        EXPECTED_DATABASE="metervalues_dev"
+        ;;
+    *)
+        echo "Usage: $0 {test|dev}"
+        exit 1
+        ;;
+esac
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    echo "ERROR: $ENV_FILE not found"
     exit 1
 fi
 
-echo "=== DATABASE: metervalues_test ==="
+# Load database configuration.
+set -a
+source "$ENV_FILE"
+set +a
+
+# Safety check.
+if [[ "${DATABASE_URL}" != *"$EXPECTED_DATABASE"* ]]; then
+    echo "ERROR: DATABASE_URL does not point to $EXPECTED_DATABASE"
+    exit 1
+fi
+
+echo "=== DATABASE: $EXPECTED_DATABASE ==="
 echo
 
 psql "$DATABASE_URL" <<'SQL'
