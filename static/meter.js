@@ -53,38 +53,136 @@ async function loadMeter() {
             noInstances.textContent = "No meter instances found.";
 
             meterElement.appendChild(noInstances);
-        } else {
-            const instancesGrid = document.createElement("div");
-            instancesGrid.className = "meter-instance-grid";
+            return;
+        }
 
-            for (const instance of instances) {
-                const instanceCard = document.createElement("div");
-                instanceCard.className = "meter-instance-card";
+        const instancesGrid = document.createElement("div");
+        instancesGrid.className = "meter-instance-grid";
 
-                const number = document.createElement("h3");
-                number.textContent = instance.meter_number;
+        let activeInstance = null;
 
-                const installed = document.createElement("p");
-                installed.textContent =
-                    `Installed: ${instance.installed_at}`;
+        for (const instance of instances) {
+            const instanceCard = document.createElement("div");
+            instanceCard.className = "meter-instance-card";
 
-                const status = document.createElement("p");
+            const number = document.createElement("h3");
+            number.textContent = instance.meter_number;
 
-                if (instance.removed_at) {
-                    status.textContent =
-                        `Removed: ${instance.removed_at}`;
-                } else {
-                    status.textContent = "Status: Active";
-                }
+            const installed = document.createElement("p");
+            installed.textContent =
+                `Installed: ${instance.installed_at}`;
 
-                instanceCard.appendChild(number);
-                instanceCard.appendChild(installed);
-                instanceCard.appendChild(status);
+            const status = document.createElement("p");
 
-                instancesGrid.appendChild(instanceCard);
+            if (instance.removed_at) {
+                status.textContent =
+                    `Removed: ${instance.removed_at}`;
+            } else {
+                status.textContent = "Status: Active";
+                activeInstance = instance;
             }
 
-            meterElement.appendChild(instancesGrid);
+            instanceCard.appendChild(number);
+            instanceCard.appendChild(installed);
+            instanceCard.appendChild(status);
+
+            instancesGrid.appendChild(instanceCard);
+        }
+
+        meterElement.appendChild(instancesGrid);
+
+        // --------------------------------------------------------
+        // New reading form
+        // --------------------------------------------------------
+
+        const readingFormTitle = document.createElement("h2");
+        readingFormTitle.textContent = "Add reading";
+
+        meterElement.appendChild(readingFormTitle);
+
+        if (!activeInstance) {
+            const noActiveInstance = document.createElement("p");
+            noActiveInstance.textContent =
+                "No active meter instance available.";
+
+            meterElement.appendChild(noActiveInstance);
+        } else {
+            const form = document.createElement("form");
+            form.className = "reading-form";
+
+            const dateLabel = document.createElement("label");
+            dateLabel.textContent = "Date";
+            dateLabel.htmlFor = "reading-date";
+
+            const dateInput = document.createElement("input");
+            dateInput.id = "reading-date";
+            dateInput.name = "reading_date";
+            dateInput.type = "date";
+            dateInput.required = true;
+
+            const valueLabel = document.createElement("label");
+            valueLabel.textContent = `Value (${meter.unit})`;
+            valueLabel.htmlFor = "reading-value";
+
+            const valueInput = document.createElement("input");
+            valueInput.id = "reading-value";
+            valueInput.name = "value";
+            valueInput.type = "number";
+            valueInput.step = "0.001";
+            valueInput.min = "0";
+            valueInput.required = true;
+
+            const submitButton = document.createElement("button");
+            submitButton.type = "submit";
+            submitButton.textContent = "Add reading";
+
+            const message = document.createElement("p");
+
+            form.appendChild(dateLabel);
+            form.appendChild(dateInput);
+            form.appendChild(valueLabel);
+            form.appendChild(valueInput);
+            form.appendChild(submitButton);
+            form.appendChild(message);
+
+            form.addEventListener("submit", async (event) => {
+                event.preventDefault();
+
+                message.textContent = "";
+
+                const reading = {
+                    reading_date: dateInput.value,
+                    value: Number(valueInput.value),
+                };
+
+                try {
+                    const response = await fetch(
+                        `/api/meter-instances/${activeInstance.id}/readings`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(reading),
+                        }
+                    );
+
+                    if (!response.ok) {
+                        throw new Error("Could not create reading");
+                    }
+
+                    dateInput.value = "";
+                    valueInput.value = "";
+
+                    await loadMeter();
+                } catch (error) {
+                    console.error(error);
+                    message.textContent =
+                        "Could not add reading.";
+                }
+            });
+
+            meterElement.appendChild(form);
         }
 
         // --------------------------------------------------------
@@ -149,6 +247,22 @@ async function loadMeter() {
 
                 tableBody.appendChild(row);
             }
+        }
+
+        // Newest reading first.
+        const rows = Array.from(tableBody.querySelectorAll("tr"));
+
+        rows.sort((a, b) => {
+            const dateA = a.cells[0].textContent;
+            const dateB = b.cells[0].textContent;
+
+            return dateB.localeCompare(dateA);
+        });
+
+        tableBody.innerHTML = "";
+
+        for (const row of rows) {
+            tableBody.appendChild(row);
         }
 
         readingsTable.appendChild(tableBody);
