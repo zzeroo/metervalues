@@ -118,6 +118,7 @@ async function loadMeter() {
             dateInput.id = "reading-date";
             dateInput.name = "reading_date";
             dateInput.type = "date";
+            dateInput.value = new Date().toISOString().split("T")[0];
             dateInput.required = true;
 
             const valueLabel = document.createElement("label");
