@@ -9,6 +9,73 @@ a {
     text-decoration: none;
 }
 
+/* ------------------------------------------------------------
+   Meter form
+   ------------------------------------------------------------ */
+
+.meter-form {
+    display: grid;
+    grid-template-columns: auto minmax(150px, 1fr) auto minmax(100px, 180px) auto;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.meter-form label {
+    font-weight: 600;
+}
+
+.meter-form input,
+.meter-form select,
+.meter-form button {
+    font: inherit;
+    padding: 0.5rem 0.75rem;
+    box-sizing: border-box;
+}
+
+.meter-form input,
+.meter-form select {
+    width: 100%;
+}
+
+.meter-form button {
+    cursor: pointer;
+}
+
+.meter-form p {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+/* ------------------------------------------------------------
+   Responsive meter form
+   ------------------------------------------------------------ */
+
+@media (max-width: 700px) {
+    .meter-form {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .meter-form label {
+        margin-top: 0.5rem;
+    }
+
+    .meter-form input,
+    .meter-form select,
+    .meter-form button {
+        width: 100%;
+    }
+
+    .meter-form button {
+        margin-top: 0.5rem;
+    }
+}
+
+/* ------------------------------------------------------------
+   Meter cards
+   ------------------------------------------------------------ */
+
 .meter-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -17,50 +84,98 @@ a {
 
 .meter-card {
     display: block;
-    padding: 1.5rem;
+    padding: 1.25rem;
     border: 1px solid #ccc;
-    border-radius: 8px;
-    color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border-radius: 0.5rem;
 }
 
 .meter-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+    border-color: #888;
 }
 
 .meter-card h2 {
     margin-top: 0;
-    margin-bottom: 0.5rem;
 }
 
 .meter-card p {
-    margin: 0 0 1.5rem;
-    color: #666;
+    margin-bottom: 1rem;
 }
 
 .meter-card span {
-    font-weight: bold;
+    font-weight: 600;
 }
+
+/* ------------------------------------------------------------
+   Meter instances
+   ------------------------------------------------------------ */
 
 .meter-instance-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1rem;
-    margin-top: 1rem;
+    margin-bottom: 2rem;
 }
 
 .meter-instance-card {
-    padding: 1.5rem;
+    padding: 1.25rem;
     border: 1px solid #ccc;
-    border-radius: 8px;
+    border-radius: 0.5rem;
 }
 
 .meter-instance-card h3 {
     margin-top: 0;
-    margin-bottom: 1rem;
 }
 
-.meter-instance-card p {
-    margin: 0.5rem 0;
+/* ------------------------------------------------------------
+   Reading form
+   ------------------------------------------------------------ */
+
+.reading-form {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.reading-form label {
+    font-weight: 600;
+}
+
+.reading-form input,
+.reading-form button {
+    font: inherit;
+    padding: 0.5rem 0.75rem;
+}
+
+.reading-form button {
+    cursor: pointer;
+}
+
+.reading-form p {
+    margin: 0;
+}
+
+/* ------------------------------------------------------------
+   Readings table
+   ------------------------------------------------------------ */
+
+.readings-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.readings-table th,
+.readings-table td {
+    text-align: left;
+    padding: 0.75rem;
+    border-bottom: 1px solid #ccc;
+}
+
+.readings-table th {
+    font-weight: 600;
+}
+
+.readings-table td:last-child,
+.readings-table th:last-child {
+    text-align: right;
 }
