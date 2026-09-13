@@ -239,3 +239,52 @@ pub async fn get_meter(
 
     Ok(Json(meter))
 }
+
+pub async fn delete_meter(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<StatusCode, AppError> {
+    let mut transaction = state.db.begin().await?;
+
+    sqlx::query(
+        r#"
+        DELETE FROM readings
+        WHERE meter_instance_id IN (
+            SELECT id
+            FROM meter_instances
+            WHERE meter_id = $1
+        )
+        "#,
+    )
+    .bind(id)
+    .execute(&mut *transaction)
+    .await?;
+
+    sqlx::query(
+        r#"
+        DELETE FROM meter_instances
+        WHERE meter_id = $1
+        "#,
+    )
+    .bind(id)
+    .execute(&mut *transaction)
+    .await?;
+
+    let deleted_meter = sqlx::query(
+        r#"
+        DELETE FROM meters
+        WHERE id = $1
+        "#,
+    )
+    .bind(id)
+    .execute(&mut *transaction)
+    .await?;
+
+    if deleted_meter.rows_affected() == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    transaction.commit().await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}

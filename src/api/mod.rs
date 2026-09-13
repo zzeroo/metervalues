@@ -16,7 +16,10 @@ pub fn router() -> Router<AppState> {
             "/api/meters",
             get(meters::get_meters).post(meters::create_meter),
         )
-        .route("/api/meters/{id}", get(meters::get_meter))
+        .route(
+            "/api/meters/{id}",
+            get(meters::get_meter).delete(meters::delete_meter),
+        )
         .route(
             "/api/meters/{meter_id}/instances",
             get(meters::get_meter_instances).post(meters::create_meter_instance),

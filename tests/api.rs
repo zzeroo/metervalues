@@ -1148,3 +1148,111 @@ READING-IMPORT-001,2026-02-01,123.456
 
     cleanup_meter(&db, meter_id).await;
 }
+
+#[tokio::test]
+async fn delete_meter_deletes_meter_and_all_related_data() {
+    let db = test_db().await;
+
+    // Create a dedicated logical meter.
+    let meter_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meters (name, unit)
+        VALUES ($1, $2)
+        RETURNING id
+        "#,
+    )
+    .bind("API Delete Meter Test")
+    .bind("kWh")
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter");
+
+    // Create a meter instance.
+    let meter_instance_id: i64 = sqlx::query_scalar(
+        r#"
+        INSERT INTO meter_instances (
+            meter_id,
+            meter_number,
+            initial_reading,
+            initial_reading_date,
+            installed_at
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        "#,
+    )
+    .bind(meter_id)
+    .bind("DELETE-TEST-001")
+    .bind(Decimal::new(0, 3))
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap())
+    .fetch_one(&db)
+    .await
+    .expect("Could not create test meter instance");
+
+    // Create a reading.
+    sqlx::query(
+        r#"
+        INSERT INTO readings (
+            meter_instance_id,
+            reading_date,
+            value
+        )
+        VALUES ($1, $2, $3)
+        "#,
+    )
+    .bind(meter_instance_id)
+    .bind(chrono::NaiveDate::from_ymd_opt(2026, 2, 1).unwrap())
+    .bind(Decimal::new(123_456, 3))
+    .execute(&db)
+    .await
+    .expect("Could not create test reading");
+
+    let app = metervalues::create_app(db.clone());
+
+    // Delete the meter.
+    let uri = format!("/api/meters/{meter_id}");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::DELETE)
+                .uri(&uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("Request failed");
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    // Verify the meter was deleted.
+    let meter_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM meters WHERE id = $1)")
+            .bind(meter_id)
+            .fetch_one(&db)
+            .await
+            .expect("Could not query meter");
+
+    assert!(!meter_exists);
+
+    // Verify the meter instance was deleted.
+    let instance_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM meter_instances WHERE id = $1)")
+            .bind(meter_instance_id)
+            .fetch_one(&db)
+            .await
+            .expect("Could not query meter instance");
+
+    assert!(!instance_exists);
+
+    // Verify the reading was deleted.
+    let reading_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM readings WHERE meter_instance_id = $1)")
+            .bind(meter_instance_id)
+            .fetch_one(&db)
+            .await
+            .expect("Could not query readings");
+
+    assert!(!reading_exists);
+}
