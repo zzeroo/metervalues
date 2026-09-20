@@ -20,19 +20,21 @@ async function loadMeters() {
         newMeterLink.href = "#";
         newMeterLink.textContent = "+ New meter";
 
-        const form = document.createElement("form");
-        form.className = "meter-form";
+        const newMeterSection = document.createElement("div");
 
         if (meters.length > 0) {
-            form.style.display = "none";
+            newMeterSection.style.display = "none";
         }
+
+        const form = document.createElement("form");
+        form.className = "meter-form";
 
         newMeterLink.addEventListener("click", (event) => {
             event.preventDefault();
 
-            const hidden = form.style.display === "none";
+            const hidden = newMeterSection.style.display === "none";
 
-            form.style.display = hidden ? "" : "none";
+            newMeterSection.style.display = hidden ? "" : "none";
             newMeterLink.textContent = hidden
                 ? "− New meter"
                 : "+ New meter";
@@ -134,15 +136,86 @@ async function loadMeters() {
             }
         });
 
+        newMeterSection.appendChild(form);
+
         if (meters.length > 0) {
             metersElement.appendChild(newMeterLink);
         }
 
-      metersElement.appendChild(form);
+        metersElement.appendChild(newMeterSection);
 
-        // --------------------------------------------------------
-        // Meter list
-        // --------------------------------------------------------
+      // --------------------------------------------------------
+      // Meter CSV import / export
+      // --------------------------------------------------------
+
+      const csvSection = document.createElement("div");
+      csvSection.className = "csv-section";
+
+      const csvTitle = document.createElement("h2");
+      csvTitle.textContent = "CSV import";
+
+      const downloadLink = document.createElement("a");
+      downloadLink.href = "data:text/csv;charset=utf-8,name%2Cunit%0AElectricity%2CkWh%0AWater%2Cm%C2%B3%0AGas%2Cm%C2%B3%0A";
+      downloadLink.download = "meters.csv";
+      downloadLink.textContent = "Download CSV template";
+
+      const importForm = document.createElement("form");
+
+      const fileInput = document.createElement("input");
+      fileInput.type = "file";
+      fileInput.accept = ".csv,text/csv";
+      fileInput.required = true;
+
+      const importButton = document.createElement("button");
+      importButton.type = "submit";
+      importButton.textContent = "Import meters";
+
+      const importMessage = document.createElement("p");
+
+      importForm.appendChild(fileInput);
+      importForm.appendChild(importButton);
+      importForm.appendChild(importMessage);
+
+      importForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+
+          importMessage.textContent = "";
+
+          const file = fileInput.files[0];
+
+          if (!file) {
+              return;
+          }
+
+          try {
+              const response = await fetch("/api/import/meters", {
+                  method: "POST",
+                  body: await file.arrayBuffer(),
+              });
+
+              if (!response.ok) {
+                  throw new Error("Could not import meters");
+              }
+
+              importMessage.textContent = "Meters imported successfully.";
+
+              await loadMeters();
+          } catch (error) {
+              console.error(error);
+
+              importMessage.textContent = "Could not import meters.";
+          }
+      });
+
+      csvSection.appendChild(csvTitle);
+      csvSection.appendChild(downloadLink);
+      csvSection.appendChild(importForm);
+
+      newMeterSection.appendChild(csvSection);
+
+      // --------------------------------------------------------
+      // Meter list
+      // --------------------------------------------------------
 
         if (meters.length === 0) {
             const noMeters = document.createElement("p");
@@ -177,7 +250,8 @@ async function loadMeters() {
             meterGrid.appendChild(meterCard);
         }
 
-        metersElement.appendChild(meterGrid);
+      metersElement.appendChild(meterGrid);
+
     } catch (error) {
         console.error(error);
 
