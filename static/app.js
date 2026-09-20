@@ -16,9 +16,27 @@ async function loadMeters() {
         // New meter form
         // --------------------------------------------------------
 
+        const newMeterLink = document.createElement("a");
+        newMeterLink.href = "#";
+        newMeterLink.textContent = "+ New meter";
+
         const form = document.createElement("form");
         form.className = "meter-form";
 
+        if (meters.length > 0) {
+            form.style.display = "none";
+        }
+
+        newMeterLink.addEventListener("click", (event) => {
+            event.preventDefault();
+
+            const hidden = form.style.display === "none";
+
+            form.style.display = hidden ? "" : "none";
+            newMeterLink.textContent = hidden
+                ? "− New meter"
+                : "+ New meter";
+        });
         const nameLabel = document.createElement("label");
         nameLabel.textContent = "Name";
         nameLabel.htmlFor = "meter-name";
@@ -116,7 +134,11 @@ async function loadMeters() {
             }
         });
 
-        metersElement.appendChild(form);
+        if (meters.length > 0) {
+            metersElement.appendChild(newMeterLink);
+        }
+
+      metersElement.appendChild(form);
 
         // --------------------------------------------------------
         // Meter list
