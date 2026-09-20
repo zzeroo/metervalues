@@ -48,6 +48,119 @@ async function loadMeter() {
     meterElement.appendChild(deleteButton);
 
     // --------------------------------------------------------
+    // New meter instance form
+    // --------------------------------------------------------
+
+    const instanceFormTitle = document.createElement("h2");
+    instanceFormTitle.textContent = "Add meter instance";
+
+    meterElement.appendChild(instanceFormTitle);
+
+    const instanceForm = document.createElement("form");
+    instanceForm.className = "meter-instance-form";
+
+    const numberLabel = document.createElement("label");
+    numberLabel.textContent = "Meter number";
+    numberLabel.htmlFor = "meter-number";
+
+    const numberInput = document.createElement("input");
+    numberInput.id = "meter-number";
+    numberInput.name = "meter_number";
+    numberInput.type = "text";
+    numberInput.required = true;
+
+    const initialReadingLabel = document.createElement("label");
+    initialReadingLabel.textContent = `Initial reading (${meter.unit})`;
+    initialReadingLabel.htmlFor = "initial-reading";
+
+    const initialReadingInput = document.createElement("input");
+    initialReadingInput.id = "initial-reading";
+    initialReadingInput.name = "initial_reading";
+    initialReadingInput.type = "number";
+    initialReadingInput.step = "0.001";
+    initialReadingInput.min = "0";
+    initialReadingInput.required = true;
+
+    const initialDateLabel = document.createElement("label");
+    initialDateLabel.textContent = "Initial reading date";
+    initialDateLabel.htmlFor = "initial-reading-date";
+
+    const initialDateInput = document.createElement("input");
+    initialDateInput.id = "initial-reading-date";
+    initialDateInput.name = "initial_reading_date";
+    initialDateInput.type = "date";
+    initialDateInput.value = new Date().toISOString().split("T")[0];
+    initialDateInput.required = true;
+
+    const installedLabel = document.createElement("label");
+    installedLabel.textContent = "Installed at";
+    installedLabel.htmlFor = "installed-at";
+
+    const installedInput = document.createElement("input");
+    installedInput.id = "installed-at";
+    installedInput.name = "installed_at";
+    installedInput.type = "date";
+    installedInput.value = new Date().toISOString().split("T")[0];
+    installedInput.required = true;
+
+    const instanceSubmitButton = document.createElement("button");
+    instanceSubmitButton.type = "submit";
+    instanceSubmitButton.textContent = "Add meter instance";
+
+    const instanceMessage = document.createElement("p");
+
+    instanceForm.appendChild(numberLabel);
+    instanceForm.appendChild(numberInput);
+
+    instanceForm.appendChild(initialReadingLabel);
+    instanceForm.appendChild(initialReadingInput);
+
+    instanceForm.appendChild(initialDateLabel);
+    instanceForm.appendChild(initialDateInput);
+
+    instanceForm.appendChild(installedLabel);
+    instanceForm.appendChild(installedInput);
+
+    instanceForm.appendChild(instanceSubmitButton);
+    instanceForm.appendChild(instanceMessage);
+
+    instanceForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      instanceMessage.textContent = "";
+
+      const meterInstance = {
+        meter_number: numberInput.value,
+        initial_reading: Number(initialReadingInput.value),
+        initial_reading_date: initialDateInput.value,
+        installed_at: installedInput.value,
+      };
+
+      try {
+        const response = await fetch(`/api/meters/${meterId}/instances`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(meterInstance),
+        });
+
+        if (!response.ok) {
+          throw new Error("Could not create meter instance");
+        }
+
+        await loadMeter();
+      } catch (error) {
+        console.error(error);
+
+        instanceMessage.textContent =
+          "Could not add meter instance.";
+      }
+    });
+
+    meterElement.appendChild(instanceForm);
+
+    // --------------------------------------------------------
     // Meter instances
     // --------------------------------------------------------
 

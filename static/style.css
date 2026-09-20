@@ -77,6 +77,69 @@ a {
 }
 
 /* ------------------------------------------------------------
+   Meter instance form
+   ------------------------------------------------------------ */
+
+.meter-instance-form {
+    display: grid;
+    grid-template-columns: auto minmax(150px, 1fr) auto minmax(120px, 180px);
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.meter-instance-form label {
+    font-weight: 600;
+}
+
+.meter-instance-form input,
+.meter-instance-form button {
+    font: inherit;
+    padding: 0.5rem 0.75rem;
+    box-sizing: border-box;
+}
+
+.meter-instance-form input {
+    width: 100%;
+}
+
+.meter-instance-form button {
+    cursor: pointer;
+    grid-column: 2 / -1;
+    justify-self: start;
+}
+
+.meter-instance-form p {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+/* ------------------------------------------------------------
+   Responsive meter instance form
+   ------------------------------------------------------------ */
+
+@media (max-width: 700px) {
+    .meter-instance-form {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .meter-instance-form label {
+        margin-top: 0.5rem;
+    }
+
+    .meter-instance-form input,
+    .meter-instance-form button {
+        width: 100%;
+    }
+
+    .meter-instance-form button {
+        grid-column: auto;
+        margin-top: 0.5rem;
+    }
+}
+
+/* ------------------------------------------------------------
    Meter cards
    ------------------------------------------------------------ */
 
