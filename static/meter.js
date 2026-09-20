@@ -51,13 +51,27 @@ async function loadMeter() {
     // New meter instance form
     // --------------------------------------------------------
 
-    const instanceFormTitle = document.createElement("h2");
-    instanceFormTitle.textContent = "Add meter instance";
-
-    meterElement.appendChild(instanceFormTitle);
+    const newMeterInstanceLink = document.createElement("a");
+    newMeterInstanceLink.href = "#";
+    newMeterInstanceLink.textContent = "+ New meter instance";
 
     const instanceForm = document.createElement("form");
     instanceForm.className = "meter-instance-form";
+
+    if (instances.length > 0) {
+        instanceForm.style.display = "none";
+    }
+
+    newMeterInstanceLink.addEventListener("click", (event) => {
+        event.preventDefault();
+
+        const hidden = instanceForm.style.display === "none";
+
+        instanceForm.style.display = hidden ? "" : "none";
+        newMeterInstanceLink.textContent = hidden
+            ? "− New meter instance"
+            : "+ New meter instance";
+    });
 
     const numberLabel = document.createElement("label");
     numberLabel.textContent = "Meter number";
@@ -157,6 +171,10 @@ async function loadMeter() {
           "Could not add meter instance.";
       }
     });
+
+    if (instances.length > 0) {
+        meterElement.appendChild(newMeterInstanceLink);
+    }
 
     meterElement.appendChild(instanceForm);
 
