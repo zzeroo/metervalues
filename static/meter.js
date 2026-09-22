@@ -55,19 +55,21 @@ async function loadMeter() {
     newMeterInstanceLink.href = "#";
     newMeterInstanceLink.textContent = "+ New meter instance";
 
-    const instanceForm = document.createElement("form");
-    instanceForm.className = "meter-instance-form";
+    const newMeterInstanceSection = document.createElement("div");
 
     if (instances.length > 0) {
-        instanceForm.style.display = "none";
+        newMeterInstanceSection.style.display = "none";
     }
+
+    const instanceForm = document.createElement("form");
+    instanceForm.className = "meter-instance-form";
 
     newMeterInstanceLink.addEventListener("click", (event) => {
         event.preventDefault();
 
-        const hidden = instanceForm.style.display === "none";
+        const hidden = newMeterInstanceSection.style.display === "none";
 
-        instanceForm.style.display = hidden ? "" : "none";
+        newMeterInstanceSection.style.display = hidden ? "" : "none";
         newMeterInstanceLink.textContent = hidden
             ? "− New meter instance"
             : "+ New meter instance";
@@ -172,11 +174,85 @@ async function loadMeter() {
       }
     });
 
+    newMeterInstanceSection.appendChild(instanceForm);
+
+    // --------------------------------------------------------
+    // Meter instance CSV import / export
+    // --------------------------------------------------------
+
+    const csvSection = document.createElement("div");
+    csvSection.className = "csv-section";
+
+    const csvTitle = document.createElement("h2");
+    csvTitle.textContent = "CSV import";
+
+    const downloadLink = document.createElement("a");
+    downloadLink.href =
+        "data:text/csv;charset=utf-8,meter_name%2Cmeter_number%2Cinitial_reading%2Cinitial_reading_date%2Cinstalled_at%2Cremoved_at%0AElectricity%2C47110001%2C12345.678%2C2026-01-01%2C2026-01-01%2C%0A";
+    downloadLink.download = "meter-instances.csv";
+    downloadLink.textContent = "Download CSV template";
+
+    const importForm = document.createElement("form");
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".csv,text/csv";
+    fileInput.required = true;
+
+    const importButton = document.createElement("button");
+    importButton.type = "submit";
+    importButton.textContent = "Import meter instances";
+
+    const importMessage = document.createElement("p");
+
+    importForm.appendChild(fileInput);
+    importForm.appendChild(importButton);
+    importForm.appendChild(importMessage);
+
+    importForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        importMessage.textContent = "";
+
+        const file = fileInput.files[0];
+
+        if (!file) {
+            return;
+        }
+
+        try {
+            const response = await fetch("/api/import/meter-instances", {
+                method: "POST",
+                body: await file.arrayBuffer(),
+            });
+
+            if (!response.ok) {
+                throw new Error("Could not import meter instances");
+            }
+
+            importMessage.textContent =
+                "Meter instances imported successfully.";
+
+            await loadMeter();
+        } catch (error) {
+            console.error(error);
+
+            importMessage.textContent =
+                "Could not import meter instances.";
+        }
+    });
+
+    csvSection.appendChild(csvTitle);
+    csvSection.appendChild(downloadLink);
+    csvSection.appendChild(importForm);
+
+    newMeterInstanceSection.appendChild(csvSection);
+
     if (instances.length > 0) {
         meterElement.appendChild(newMeterInstanceLink);
     }
 
-    meterElement.appendChild(instanceForm);
+    meterElement.appendChild(newMeterInstanceSection);
 
     // --------------------------------------------------------
     // Meter instances
