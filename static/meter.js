@@ -271,6 +271,22 @@ async function loadMeter() {
       return;
     }
 
+    // Active meter first, then older meters newest to oldest.
+    instances.sort((a, b) => {
+      const aActive = !a.removed_at;
+      const bActive = !b.removed_at;
+
+      if (aActive && !bActive) {
+        return -1;
+      }
+
+      if (!aActive && bActive) {
+        return 1;
+      }
+
+      return b.installed_at.localeCompare(a.installed_at);
+    });
+
     const instancesGrid = document.createElement("div");
     instancesGrid.className = "meter-instance-grid";
 
