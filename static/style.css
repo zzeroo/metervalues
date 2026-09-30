@@ -246,3 +246,15 @@ a {
 .readings-table th:last-child {
     text-align: right;
 }
+
+
+
+
+.csv-section a {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.csv-section a + a {
+    margin-top: 0.5rem;
+}
