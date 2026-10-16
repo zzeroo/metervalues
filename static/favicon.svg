@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">metervalues</title>
+  <desc id="desc">Three usage charts representing electricity, water, and gas meter readings.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#172554"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="url(#bg)"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="7">
+    <path d="M34 78 L48 63 L59 70 L72 39 L84 72 L98 56 L111 76 L126 47 L140 66 L154 58 L168 76 L182 42 L196 65 L210 52 L222 70" stroke="#fbbf24"/>
+    <path d="M34 128 L47 113 L60 124 L73 96 L86 126 L99 108 L112 120 L126 91 L139 116 L152 104 L166 127 L180 101 L193 117 L207 95 L222 119" stroke="#38bdf8"/>
+    <path d="M34 178 L48 163 L61 174 L74 145 L87 174 L100 159 L113 178 L127 150 L140 169 L153 157 L166 180 L180 154 L194 172 L207 150 L222 174" stroke="#34d399"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="72" cy="39" r="4.5"/><circle cx="126" cy="47" r="4.5"/><circle cx="182" cy="42" r="4.5"/>
+    <circle cx="73" cy="96" r="4.5"/><circle cx="126" cy="91" r="4.5"/><circle cx="207" cy="95" r="4.5"/>
+    <circle cx="74" cy="145" r="4.5"/><circle cx="127" cy="150" r="4.5"/><circle cx="207" cy="150" r="4.5"/>
+  </g>
+  <path d="M34 207 H222" stroke="#94a3b8" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"/>
+  <text x="128" y="235" fill="#ffffff" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="18" font-weight="700" letter-spacing="1.1" text-anchor="middle">METERVALUES</text>
+</svg>
